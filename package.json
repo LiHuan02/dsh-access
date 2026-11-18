@@ -35,7 +35,7 @@
     "build": "node scripts/build.mjs",
     "prepare": "node scripts/build.mjs",
     "prepack": "node scripts/build.mjs",
-    "test": "node tests/compat.check.mjs && node tests/connectors.check.mjs && node tests/approval.check.mjs && node tests/browser-setup.check.mjs && node tests/bridge.check.mjs && node tests/unit.check.mjs"
+    "test": "node tests/compat.check.mjs && node tests/connectors.check.mjs && node tests/approval.check.mjs && node tests/browser-setup.check.mjs && node tests/bridge.check.mjs && node tests/unit.check.mjs && node tests/plugin-load.check.mjs"
   },
   "keywords": [
     "dsh-plugin",

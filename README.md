@@ -97,7 +97,7 @@ follow if part of another project is ever vendored in.
 
 ## Tools
 
-Credentials and connectors: `access_status`, `access_credential_card`, `access_login`, `access_request_status`, `access_connectors`, `access_connector_call`.
+Credentials and connectors: `access_status`, `access_sites`, `access_page_state`, `access_credential_card`, `access_login`, `access_request_status`, `access_autofill`, `access_connectors`, `access_connector_call`, `access_install_browser_bridge`.
 
 Browser: `access_browser_open`, `access_browser_snapshot`, `access_browser_read`, `access_browser_click`, `access_browser_type`, `access_browser_key`, `access_browser_scroll`, `access_browser_action`, `access_browser_file`, `access_browser_view`, `access_browser_tabs`, `access_browser_screenshot`, and `access_browser_do` for a whole flow in one call.
 
@@ -111,6 +111,7 @@ node tests/approval.check.mjs       # approval gate: read runs, rejected write b
 node tests/browser-setup.check.mjs  # one-click shared-browser install: every answer the plugin manager can give
 node tests/bridge.check.mjs         # desktop-bridge client against a fake bridge: ordering, refusal, timeout
 node tests/unit.check.mjs           # TOTP vectors, encrypted export round trip, CSV importers
+node tests/plugin-load.check.mjs    # activation: every tool, schema and prompt section, with services missing
 ```
 
 The test files are plain Node scripts with no test runner. `connectors.check.mjs` bundles the connector modules with esbuild and calls the actions directly (so a write can be exercised without an approval prompt); `approval.check.mjs` points `DSH_HOME` at a temporary directory, unlocks a throwaway connector vault with `setConnectorKey`, and injects an `approve` callback into `runtime.callConnector`; `bridge.check.mjs` stands up a fake bridge socket and speaks the wire protocol to it. None of them touches the real vault or the real browser.
