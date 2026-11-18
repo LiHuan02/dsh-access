@@ -1,5 +1,7 @@
 # dsh-access
 
+[![ci](https://github.com/LiHuan02/dsh-access/actions/workflows/ci.yml/badge.svg)](https://github.com/LiHuan02/dsh-access/actions/workflows/ci.yml)
+
 Access combines three things in one DeepSeek Harness plugin:
 
 - **A persistent encrypted credential vault** for website logins. You enter a password once in a small in-conversation card; afterwards the agent can ask for a login and the browser fills it without the password ever reaching the model.
