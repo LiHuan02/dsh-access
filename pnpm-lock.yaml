@@ -9,10 +9,10 @@ importers:
   .:
     dependencies:
       '@deepseek-ai/cordis':
-        specifier: ~4.1.0
+        specifier: '>=4.1.0'
         version: 4.1.0
       '@deepseek-ai/dsh-tools':
-        specifier: 0.2.2-rc.1
+        specifier: '>=0.2.2-rc.1'
         version: 0.2.2-rc.1(a13a0f05e8644f33708fe2540ec79e5a)
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
@@ -358,6 +358,11 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
+    peerDependencies:
+      ajv: ^8.0.0
+    peerDependenciesMeta:
+      ajv:
+        optional: true
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
@@ -1072,7 +1077,7 @@ snapshots:
     dependencies:
       '@hono/node-server': 2.1.7(hono@4.13.18)
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
       cors: 2.8.6
       cross-spawn: 7.0.6
@@ -1122,8 +1127,8 @@ snapshots:
       mime-types: 3.0.2
       negotiator: 1.1.0
 
-  ajv-formats@3.0.1:
-    dependencies:
+  ajv-formats@3.0.1(ajv@8.20.0):
+    optionalDependencies:
       ajv: 8.20.0
 
   ajv@8.20.0:
