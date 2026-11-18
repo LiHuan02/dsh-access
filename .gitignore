@@ -1,0 +1,8 @@
+node_modules/
+lib/
+.dsh-meow/
+*.log
+.tmp-*
+.refs/
+.playwright-mcp/
+secrets.local.json
