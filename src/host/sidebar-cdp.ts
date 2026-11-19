@@ -178,7 +178,36 @@ export class BridgeConnection {
   }
 }
 
-/** The sidebar page this conversation owns, plus CDP on top of it. */
+/**
+ * A page handle for one conversation, plus CDP on top of it.
+ *
+ * Two independent tab systems exist in the shell: the plugin that owns the
+ * bridge places its own panel, and DSH itself can open a browser tab through
+ * `sidebarRight.openTabIn`. A page from the second one is perfectly driveable
+ * over CDP — the bridge addresses guests by id, not by owner — so `ensure`
+ * falls back to asking the shell what webviews the conversation actually has
+ * instead of insisting the bridge's own panel is the only one.
+ */
+/** Lower-cased host of a URL or bare host name, for "is this page already there" checks. */
+function hostOf(value: string | undefined): string {
+  const raw = String(value ?? '').trim()
+  if (raw === '') return ''
+  try {
+    return new URL(raw.includes('://') ? raw : `https://${raw}`).hostname.toLowerCase().replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+export type PanelMounter = (owner: string, url?: string) => Promise<void>
+
+let mounter: PanelMounter | undefined
+
+/** Let the host contribute "open the browser tab in this conversation". */
+export function setPanelMounter(fn: PanelMounter | undefined): void {
+  mounter = fn
+}
+
 export class SidebarPage {
   constructor(
     private readonly bridge: BridgeConnection,
@@ -188,19 +217,62 @@ export class SidebarPage {
   /**
    * The conversation's own sidebar page, opened at `url` when given.
    *
-   * `ensureSidebar` places the page in that conversation's panel — never in the
-   * one on screen — so this is safe to call for a background conversation too.
+   * Order matters: the bridge's own panel first (one round trip), then any
+   * webview already in this conversation's sidebar, then — only when there is
+   * genuinely no page — ask the renderer to open the tab and wait for it.
    */
   async ensure(url?: string): Promise<number> {
-    const answer = await this.bridge.call('ensureSidebar', {
-      owner: this.owner,
-      ...url !== undefined && url !== '' ? { url } : {},
-    }, 30_000)
-    const id = Number(answer?.id)
-    if (answer?.ok !== true || !Number.isFinite(id) || id <= 0) {
-      throw new Error(String(answer?.error ?? answer?.reason ?? 'the sidebar reported no browser page'))
+    const placed = await this.askBridge(url)
+    if (placed !== undefined) return placed
+    const existing = await this.fromList(url)
+    if (existing !== undefined) return existing
+    if (mounter !== undefined) {
+      try {
+        await mounter(this.owner, url)
+      } catch {
+        // the renderer is allowed to refuse; the wait below reports the truth
+      }
+      for (let attempt = 0; attempt < 25; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        const found = await this.fromList(url)
+        if (found !== undefined) return found
+      }
     }
-    return id
+    throw new Error('this conversation has no browser page yet — open the Browser tab in the sidebar once, then retry')
+  }
+
+  /** The bridge's own panel op; a refusal is a normal answer, not an error. */
+  private async askBridge(url?: string): Promise<number | undefined> {
+    try {
+      const answer = await this.bridge.call('ensureSidebar', {
+        owner: this.owner,
+        ...url !== undefined && url !== '' ? { url } : {},
+      }, 6_000)
+      const id = Number(answer?.id)
+      if (answer?.ok === true && Number.isFinite(id) && id > 0) return id
+    } catch {
+      // the panel may need the renderer half; the list below is the answer
+    }
+    return undefined
+  }
+
+  /** Any webview this conversation's sidebar is showing, preferring the asked host. */
+  private async fromList(url?: string): Promise<number | undefined> {
+    try {
+      const listed = await this.bridge.call('list', { owner: this.owner }, 8_000)
+      const pages = Array.isArray(listed?.sidebar)
+        ? listed.sidebar.filter((row: any) => row?.type === 'webview' && Number(row?.id) > 0)
+        : []
+      if (pages.length === 0) return undefined
+      const wanted = hostOf(url)
+      const matching = wanted === ''
+        ? undefined
+        : pages.find((row: any) => hostOf(String(row?.url ?? '')) === wanted)
+      const chosen = matching ?? pages[0]
+      return Number(chosen.id)
+    } catch {
+      return undefined
+    }
   }
 
   /** Run one CDP command against this conversation's page. */

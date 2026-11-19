@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { appendAudit, readVault, writeVault } from './vault-store.js'
 import { fillOnSidebar, fillTotpOnSidebar } from './browser-cdp.js'
+import { setPanelMounter } from './sidebar-cdp.js'
 import { registerBrowserTools } from './browser-tools.js'
 import { callConnector, connect, disconnect, listConnectors, pollOAuth, startOAuth, test as testConnector } from './connectors/runtime.js'
 import { clearConnectorKey, hasConnectorKey, resetConnectors, setConnectorKey } from './connectors/vault.js'
@@ -606,6 +607,13 @@ export function apply(ctx: any, config: any = {}): void {
   })
 
   registerBrowserTools(ctx, request, textRender)
+
+  // Batching and CDP both need a page in this conversation. When the shell has
+  // none, the renderer is the only side that can open the sidebar's browser tab,
+  // so the driver asks it here instead of failing the first call after a restart.
+  setPanelMounter(async (owner: string, url?: string) => {
+    await request('browser.ensure', { sessionId: owner, site: url ?? '' }, 8000)
+  })
 
   addPromptSection(ctx, {
     name: 'access:browser-and-credentials',

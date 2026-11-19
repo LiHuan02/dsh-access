@@ -19,7 +19,7 @@ import { build } from 'esbuild'
 const work = await mkdtemp(join(tmpdir(), 'dsh-access-bridge-'))
 
 await build({
-  stdin: { contents: "export { BridgeConnection, SidebarPage } from './src/host/sidebar-cdp.ts'", resolveDir: process.cwd(), loader: 'ts' },
+  stdin: { contents: "export { BridgeConnection, SidebarPage, setPanelMounter } from './src/host/sidebar-cdp.ts'", resolveDir: process.cwd(), loader: 'ts' },
   bundle: true,
   platform: 'node',
   format: 'esm',
@@ -29,7 +29,7 @@ await build({
   logLevel: 'silent',
 })
 
-const { BridgeConnection, SidebarPage } = await import(`file://${join(work, 'bridge.mjs').replaceAll('\\', '/')}`)
+const { BridgeConnection, SidebarPage, setPanelMounter } = await import(`file://${join(work, 'bridge.mjs').replaceAll('\\', '/')}`)
 
 let failed = 0
 function check(ok, label) {
@@ -135,6 +135,73 @@ check(await BridgeConnection.open(join(work, 'absent.json')) === undefined, 'a m
     message = error instanceof Error ? error.message : String(error)
   }
   check(/no browser page/.test(message), 'a page-less answer is an error the caller can read')
+  connection.close()
+  await bridge.close()
+}
+
+// 7. A page the plugin's own panel refuses is still driveable when the shell
+//    already shows one: the conversation's webviews are found through `list`.
+{
+  const bridge = await fakeBridge((request) => (request.op === 'ensureSidebar'
+    ? { ok: false, error: 'this conversation\'s browser panel produced no page within its budget' }
+    : { ok: true, sidebar: [{ id: 9, type: 'webview', url: 'https://example.org/' }] }))
+  const connection = await BridgeConnection.open(bridge.endpoint)
+  const page = new SidebarPage(connection, 'session-test')
+  let message = ''
+  let id
+  try {
+    id = await page.ensure('https://example.org')
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error)
+  }
+  check(id === 9, 'a refused panel falls back to the conversation\'s existing page', message)
+  connection.close()
+  await bridge.close()
+}
+
+// 8. With nothing on screen, the renderer is asked to open the tab, then the
+//    page is picked up on the next look.
+{
+  let listed = 0
+  let mounted = ''
+  setPanelMounter(async (owner, url) => {
+    mounted = `${owner} ${url}`
+  })
+  const bridge = await fakeBridge((request) => {
+    if (request.op === 'ensureSidebar') return { ok: false, error: 'not displayed' }
+    listed += 1
+    return listed < 2 ? { ok: true, sidebar: [] } : { ok: true, sidebar: [{ id: 4, type: 'webview', url: 'https://example.net/' }] }
+  })
+  const connection = await BridgeConnection.open(bridge.endpoint)
+  const page = new SidebarPage(connection, 'session-abc')
+  let message = ''
+  let id
+  try {
+    id = await page.ensure('https://example.net')
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error)
+  }
+  check(id === 4, 'an empty sidebar is filled by asking the renderer, then picked up', message)
+  check(mounted === 'session-abc https://example.net', 'the mounter is told which conversation and address to open', mounted)
+  setPanelMounter(undefined)
+  connection.close()
+  await bridge.close()
+}
+
+// 9. A conversation with no page and no mounter says what to do, not just "failed".
+{
+  const bridge = await fakeBridge((request) => (request.op === 'ensureSidebar'
+    ? { ok: false, error: 'not displayed' }
+    : { ok: true, sidebar: [] }))
+  const connection = await BridgeConnection.open(bridge.endpoint)
+  const page = new SidebarPage(connection, 'session-empty')
+  let message = ''
+  try {
+    await page.ensure()
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error)
+  }
+  check(/Browser tab/.test(message), 'an empty conversation names the Browser tab as the fix', message)
   connection.close()
   await bridge.close()
 }
