@@ -1,6 +1,10 @@
 # dsh-access
 
 [![ci](https://github.com/LiHuan02/dsh-access/actions/workflows/ci.yml/badge.svg)](https://github.com/LiHuan02/dsh-access/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/LiHuan02/dsh-access?display_name=tag)](https://github.com/LiHuan02/dsh-access/releases)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+**Version 0.3.0** — see [CHANGELOG.md](CHANGELOG.md).
 
 Access combines three things in one DeepSeek Harness plugin:
 
