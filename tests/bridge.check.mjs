@@ -206,6 +206,38 @@ check(await BridgeConnection.open(join(work, 'absent.json')) === undefined, 'a m
   await bridge.close()
 }
 
+// 10. A page the shell stopped rendering keeps answering `list` while every CDP
+//     command hangs; it must be closed and replaced instead of timing the tool out.
+{
+  let closed = 0
+  let fresh = false
+  const bridge = await fakeBridge((request) => {
+    if (request.op === 'ensureSidebar') return fresh ? { ok: true, id: 7, created: true } : { ok: false, error: 'not displayed' }
+    if (request.op === 'list') return { ok: true, sidebar: [{ id: 5, type: 'webview', url: 'https://example.org/' }] }
+    if (request.op === 'closePage') {
+      closed += 1
+      fresh = true
+      return { ok: true, closed: 1 }
+    }
+    // The frozen page never answers; the fresh one does.
+    if (request.op === 'cdp') return request.id === 5 ? undefined : { ok: true, result: { result: { value: 1 } } }
+    return { ok: true }
+  })
+  const connection = await BridgeConnection.open(bridge.endpoint)
+  const page = new SidebarPage(connection, 'session-frozen')
+  let message = ''
+  let id
+  try {
+    id = await page.ensure('https://example.org')
+  } catch (error) {
+    message = error instanceof Error ? error.message : String(error)
+  }
+  check(id === 7, 'a frozen page is replaced by a fresh one', message)
+  check(closed === 1, 'the frozen page is closed before the replacement', String(closed))
+  connection.close()
+  await bridge.close()
+}
+
 await rm(work, { recursive: true, force: true })
 
 if (failed > 0) {

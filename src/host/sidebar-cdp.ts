@@ -220,25 +220,58 @@ export class SidebarPage {
    * Order matters: the bridge's own panel first (one round trip), then any
    * webview already in this conversation's sidebar, then — only when there is
    * genuinely no page — ask the renderer to open the tab and wait for it.
+   *
+   * Whichever page comes back is then pinged, because a webview that the shell
+   * stopped rendering keeps existing and keeps being listed while every CDP
+   * command hangs: the page is real, the renderer behind it is frozen. A page
+   * that does not answer within a couple of seconds is closed and replaced, so
+   * a browser call after a restart costs a fresh tab, not a timeout.
    */
   async ensure(url?: string): Promise<number> {
-    const placed = await this.askBridge(url)
-    if (placed !== undefined) return placed
-    const existing = await this.fromList(url)
-    if (existing !== undefined) return existing
-    if (mounter !== undefined) {
+    let id = await this.askBridge(url)
+    if (id === undefined) id = await this.fromList(url)
+    if (id === undefined && mounter !== undefined) {
       try {
         await mounter(this.owner, url)
       } catch {
         // the renderer is allowed to refuse; the wait below reports the truth
       }
-      for (let attempt = 0; attempt < 25; attempt += 1) {
+      for (let attempt = 0; attempt < 25 && id === undefined; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 400))
-        const found = await this.fromList(url)
-        if (found !== undefined) return found
+        id = await this.fromList(url)
       }
     }
-    throw new Error('this conversation has no browser page yet — open the Browser tab in the sidebar once, then retry')
+    if (id === undefined) {
+      throw new Error('this conversation has no browser page yet — open the Browser tab in the sidebar once, then retry')
+    }
+    if (await this.alive(id)) return id
+    const fresh = await this.recover(url, id)
+    if (fresh !== undefined) return fresh
+    throw new Error('the sidebar browser page stopped responding and could not be replaced — open the Browser tab in the sidebar once, then retry')
+  }
+
+  /** One cheap round trip: is the renderer behind this page answering at all? */
+  private async alive(id: number): Promise<boolean> {
+    try {
+      await this.cdp(id, 'Runtime.evaluate', { expression: '1', returnByValue: true }, 2_500)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Drop a frozen page and let the bridge place a fresh one. */
+  private async recover(url: string | undefined, stale: number): Promise<number | undefined> {
+    try {
+      await this.bridge.call('closePage', { owner: this.owner, id: stale }, 5_000)
+    } catch {
+      // a page that is not ours to close is still worth replacing by another route
+    }
+    const created = await this.askBridge(url)
+    if (created !== undefined && await this.alive(created)) return created
+    const listed = await this.fromList(url)
+    if (listed !== undefined && listed !== stale && await this.alive(listed)) return listed
+    return undefined
   }
 
   /** The bridge's own panel op; a refusal is a normal answer, not an error. */
