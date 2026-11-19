@@ -130,7 +130,7 @@ check(await BridgeConnection.open(join(work, 'absent.json')) === undefined, 'a m
   const page = new SidebarPage(connection, 'session-test')
   let message = ''
   try {
-    await page.ensure()
+    await page.ensure(undefined, 1200)
   } catch (error) {
     message = error instanceof Error ? error.message : String(error)
   }
@@ -197,7 +197,7 @@ check(await BridgeConnection.open(join(work, 'absent.json')) === undefined, 'a m
   const page = new SidebarPage(connection, 'session-empty')
   let message = ''
   try {
-    await page.ensure()
+    await page.ensure(undefined, 1200)
   } catch (error) {
     message = error instanceof Error ? error.message : String(error)
   }

@@ -227,27 +227,30 @@ export class SidebarPage {
    * that does not answer within a couple of seconds is closed and replaced, so
    * a browser call after a restart costs a fresh tab, not a timeout.
    */
-  async ensure(url?: string): Promise<number> {
-    let id = await this.askBridge(url)
-    if (id === undefined) id = await this.fromList(url)
-    if (id === undefined && mounter !== undefined) {
-      try {
-        await mounter(this.owner, url)
-      } catch {
-        // the renderer is allowed to refuse; the wait below reports the truth
+  async ensure(url?: string, budgetMs = 20_000): Promise<number> {
+    const deadline = Date.now() + budgetMs
+    let askedRenderer = false
+    while (Date.now() < deadline) {
+      const id = (await this.askBridge(url)) ?? (await this.fromList(url))
+      if (id !== undefined) {
+        if (await this.alive(id)) return id
+        const fresh = await this.recover(url, id)
+        if (fresh !== undefined) return fresh
       }
-      for (let attempt = 0; attempt < 25 && id === undefined; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 400))
-        id = await this.fromList(url)
+      // The renderer is the only side that can open the tab, but right after a
+      // restart the page has not loaded the plugin's client half yet, so asking
+      // once and giving up is exactly the failure a user sees as "broken".
+      if (!askedRenderer && mounter !== undefined) {
+        askedRenderer = true
+        try {
+          await mounter(this.owner, url)
+        } catch {
+          // the renderer is allowed to refuse; the loop reports the truth
+        }
       }
+      await new Promise((resolve) => setTimeout(resolve, 700))
     }
-    if (id === undefined) {
-      throw new Error('this conversation has no browser page yet — open the Browser tab in the sidebar once, then retry')
-    }
-    if (await this.alive(id)) return id
-    const fresh = await this.recover(url, id)
-    if (fresh !== undefined) return fresh
-    throw new Error('the sidebar browser page stopped responding and could not be replaced — open the Browser tab in the sidebar once, then retry')
+    throw new Error('this conversation has no browser page yet — open the Browser tab in the sidebar once, then retry')
   }
 
   /** One cheap round trip: is the renderer behind this page answering at all? */
